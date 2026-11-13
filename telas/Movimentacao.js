@@ -1,0 +1,209 @@
+import React, { useCallback, useState } from 'react';
+import { View, Text, TextInput, Pressable, Modal, StyleSheet } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
+import { obterMovimentacao, salvarMovimentacao, textoParaCentavos, consultarRendaFamiliar, definirRendaFamiliar, formatarMoeda, CATEGORIAS } from '../banco';
+
+export default function Movimentacao({ navigation, route }) {
+  const [renda, setRenda] = useState('');
+  const [rendaDefinida, setRendaDefinida] = useState(null);
+  const [consultandoRenda, setConsultandoRenda] = useState(true);
+  const [definindoRenda, setDefinindoRenda] = useState(false);
+  const [descricao, setDescricao] = useState('');
+  const [valor, setValor] = useState('');
+  const [tipo, setTipo] = useState('Despesa');
+  const [categoria, setCategoria] = useState('');
+  const [comboAberto, setComboAberto] = useState(false);
+  const [editando, setEditando] = useState(null);
+  const [mensagem, setMensagem] = useState('');
+  const [salvando, setSalvando] = useState(false);
+
+  function limpar() {
+    setDescricao(''); setValor(''); setTipo('Despesa'); setCategoria('');
+    setEditando(null);
+  }
+
+  useFocusEffect(useCallback(() => {
+    let ativo = true;
+    setConsultandoRenda(true);
+    consultarRendaFamiliar().then((registro) => {
+      if (!ativo) return;
+      setRendaDefinida(registro?.valor_centavos ?? null);
+      setConsultandoRenda(false);
+    }).catch((e) => {
+      if (ativo) { setMensagem(`Erro ao consultar renda: ${e.message}`); setConsultandoRenda(false); }
+    });
+    const id = route.params?.editarId;
+    if (id != null) {
+      obterMovimentacao(id).then((item) => {
+        if (!ativo) return;
+        if (!item) { setMensagem('Registro não encontrado.'); return; }
+        setEditando(item.id);
+        setDescricao(item.descricao);
+        setValor((item.valor_centavos / 100).toFixed(2).replace('.', ','));
+        setTipo(item.tipo);
+        setCategoria(item.categoria || '');
+        setMensagem('Editando movimentação selecionada.');
+      }).catch((e) => { if (ativo) setMensagem(`Erro: ${e.message}`); });
+    }
+    return () => { ativo = false; };
+  }, [route.params?.editarId]));
+
+  async function confirmarRenda() {
+    if (definindoRenda || consultandoRenda || rendaDefinida !== null) return;
+    const centavos = textoParaCentavos(renda);
+    if (centavos === null) {
+      setMensagem('Digite uma renda válida. Ex.: 3000,00');
+      return;
+    }
+    setDefinindoRenda(true);
+    try {
+      const registro = await definirRendaFamiliar(centavos);
+      setRendaDefinida(registro.valor_centavos);
+      setRenda('');
+      setMensagem('Renda familiar definida e bloqueada neste mês.');
+    } catch (e) {
+      // Reconsulta para cobrir o caso em que outro toque já gravou no banco.
+      try {
+        const registro = await consultarRendaFamiliar();
+        if (registro) setRendaDefinida(registro.valor_centavos);
+      } catch (_) {}
+      setMensagem(`Erro ao definir renda: ${e.message}`);
+    } finally {
+      setDefinindoRenda(false);
+    }
+  }
+
+  async function registrar() {
+    if (consultandoRenda || rendaDefinida === null) {
+      setMensagem('Defina primeiro a renda familiar.');
+      return;
+    }
+    if (salvando) return;
+    const centavos = textoParaCentavos(valor);
+    if (!descricao.trim() || centavos === null) {
+      setMensagem('Informe uma descrição e um valor positivo. Use 150,00.');
+      return;
+    }
+    setSalvando(true);
+    try {
+      await salvarMovimentacao({ id: editando, descricao, valorCentavos: centavos, tipo, categoria });
+      limpar();
+      navigation.setParams({ editarId: undefined });
+      setMensagem('Movimentação salva no SQLite!');
+    } catch (e) {
+      setMensagem(`Erro ao salvar: ${e.message}`);
+    } finally {
+      setSalvando(false);
+    }
+  }
+
+  const bloqueado = consultandoRenda || rendaDefinida === null;
+
+  return (
+    <View style={styles.cartao}>
+      <Text style={styles.rotulo}>RENDA FAMILIAR DO MÊS</Text>
+      {rendaDefinida !== null ? (
+        <Text style={styles.rendaConfirmada}>
+          {formatarMoeda(rendaDefinida)}  (DEFINIDA)
+        </Text>
+      ) : (
+        <>
+          <TextInput
+            style={styles.campo}
+            placeholder="Ex.: 3000,00"
+            keyboardType="decimal-pad"
+            value={renda}
+            onChangeText={setRenda}
+            editable={!consultandoRenda && !definindoRenda}
+          />
+          <Pressable
+            style={[styles.botao, (consultandoRenda || definindoRenda) && styles.desabilitado]}
+            onPress={confirmarRenda}
+            disabled={consultandoRenda || definindoRenda}
+          >
+            <Text style={styles.textoBotao}>
+              {consultandoRenda ? 'CONSULTANDO...' : definindoRenda ? 'DEFININDO...' : 'DEFINIR'}
+            </Text>
+          </Pressable>
+        </>
+      )}
+      <View style={styles.separador} />
+      <Text style={styles.rotulo}>{editando == null ? 'NOVA MOVIMENTAÇÃO' : 'EDITAR MOVIMENTAÇÃO'}</Text>
+      <Text style={styles.label}>Descrição</Text>
+      <TextInput style={[styles.campo, bloqueado && styles.campoBloqueado]} placeholder="Ex.: Supermercado" value={descricao} onChangeText={setDescricao} editable={!bloqueado} />
+      <Text style={styles.label}>Valor (R$)</Text>
+      <TextInput style={[styles.campo, bloqueado && styles.campoBloqueado]} placeholder="Ex.: 150,00" keyboardType="decimal-pad" value={valor} onChangeText={setValor} editable={!bloqueado} />
+      <Text style={styles.label}>Tipo</Text>
+      <View style={styles.linha}>
+        {['Receita', 'Despesa'].map((item) => (
+          <Pressable key={item} style={[styles.opcao, tipo === item && styles.selecionado, bloqueado && styles.desabilitado]} onPress={() => setTipo(item)} disabled={bloqueado}>
+            <Text style={[styles.textoOpcao, tipo === item && styles.textoSelecionado]}>{item}</Text>
+          </Pressable>
+        ))}
+      </View>
+      {tipo === 'Despesa' && (
+        <>
+          <Text style={styles.label}>Categoria</Text>
+          <Pressable
+            style={[styles.campo, styles.combo, bloqueado && styles.campoBloqueado]}
+            onPress={() => setComboAberto(true)}
+            disabled={bloqueado}
+          >
+            <Text style={styles.textoCombo}>{categoria || 'Selecione uma categoria'}  ▾</Text>
+          </Pressable>
+        </>
+      )}
+      <Modal transparent visible={comboAberto} animationType="fade" onRequestClose={() => setComboAberto(false)}>
+        <View style={styles.fundoModal}>
+          <View style={styles.caixaModal}>
+            <Text style={styles.rotulo}>Escolha a categoria</Text>
+            {CATEGORIAS.map(nome => (
+              <Pressable key={nome} style={styles.itemCombo} onPress={() => { setCategoria(nome); setComboAberto(false); }}>
+                <Text style={styles.textoCombo}>{nome}</Text>
+              </Pressable>
+            ))}
+            <Pressable onPress={() => setComboAberto(false)} style={styles.cancelar}>
+              <Text style={styles.textoCancelar}>CANCELAR</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+      <Pressable style={[styles.botao, (salvando || bloqueado) && styles.desabilitado]} onPress={registrar} disabled={salvando || bloqueado}>
+        <Text style={styles.textoBotao}>{salvando ? 'SALVANDO...' : editando == null ? 'REGISTRAR' : 'SALVAR ALTERAÇÕES'}</Text>
+      </Pressable>
+      {editando != null && (
+        <Pressable style={styles.cancelar} onPress={() => { limpar(); navigation.setParams({ editarId: undefined }); setMensagem('Edição cancelada.'); }}>
+          <Text style={styles.textoCancelar}>CANCELAR EDIÇÃO</Text>
+        </Pressable>
+      )}
+      {!!mensagem && <Text style={styles.mensagem}>{mensagem}</Text>}
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  combo: { justifyContent: 'center' },
+  textoCombo: { color: '#173A63', fontSize: 16 },
+  fundoModal: { flex: 1, backgroundColor: '#0008', justifyContent: 'center', padding: 22 },
+  caixaModal: { backgroundColor: '#FFFFFF', borderRadius: 16, padding: 20 },
+  itemCombo: { paddingVertical: 15, borderBottomWidth: 1, borderBottomColor: '#E2E8F0' },
+  rendaConfirmada: { fontSize: 20, color: '#16803C', fontWeight: 'bold', marginBottom: 14 },
+  separador: { borderBottomWidth: 1, borderBottomColor: '#E2E8F0', marginVertical: 22 },
+  campoBloqueado: { backgroundColor: '#F1F5F9', opacity: 0.55 },
+  cartao: { backgroundColor: '#FFFFFF', borderRadius: 16, padding: 25, borderWidth: 1, borderColor: '#E2E8F0', elevation: 3 },
+  rotulo: { fontSize: 16, fontWeight: 'bold', color: '#173A63', marginBottom: 20 },
+  label: { fontSize: 15, color: '#475569', marginBottom: 7 },
+  campo: { borderWidth: 1, borderColor: '#CBD5E1', borderRadius: 8, padding: 12, fontSize: 17, marginBottom: 18 },
+  linha: { flexDirection: 'row', gap: 10, marginBottom: 22 },
+  opcao: { flex: 1, padding: 12, borderRadius: 8, backgroundColor: '#E2E8F0', alignItems: 'center' },
+  selecionado: { backgroundColor: '#173A63' },
+  textoOpcao: { color: '#475569', fontWeight: 'bold' },
+  textoSelecionado: { color: '#FFFFFF' },
+  botao: { backgroundColor: '#16803C', padding: 16, borderRadius: 10, alignItems: 'center' },
+  desabilitado: { opacity: 0.6 },
+  textoBotao: { color: '#FFFFFF', fontWeight: 'bold' },
+  cancelar: { alignItems: 'center', padding: 14 },
+  textoCancelar: { color: '#173A63', fontWeight: 'bold' },
+  mensagem: { marginTop: 15, color: '#173A63', fontSize: 15 },
+});
+

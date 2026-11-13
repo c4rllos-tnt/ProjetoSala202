@@ -1,0 +1,70 @@
+import React from 'react';
+import { View, Text, ScrollView, StyleSheet } from 'react-native';
+import { NavigationContainer } from '@react-navigation/native';
+import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+
+import Principal from './telas/Principal';
+import Movimentacao from './telas/Movimentacao';
+import Relatorio from './telas/Relatorio';
+
+const Tab = createBottomTabNavigator();
+
+function Moldura({ titulo, children }) {
+  return (
+    <View style={styles.container}>
+      <View style={styles.cabecalho}>
+        <Text style={styles.titulo}>Controle Familiar</Text>
+        <Text style={styles.subtitulo}>Minhas Finanças</Text>
+      </View>
+      <ScrollView style={styles.area} contentContainerStyle={styles.conteudo} keyboardShouldPersistTaps="handled">
+        <Text style={styles.nomeTela}>{titulo}</Text>
+        {children}
+      </ScrollView>
+    </View>
+  );
+}
+
+function TelaPrincipal(props) {
+  return <Moldura titulo="Principal"><Principal {...props} /></Moldura>;
+}
+function TelaMovimentacao(props) {
+  return <Moldura titulo="Movimentação"><Movimentacao {...props} /></Moldura>;
+}
+function TelaRelatorio(props) {
+  return <Moldura titulo="Relatório"><Relatorio {...props} /></Moldura>;
+}
+
+export default function App() {
+  return (
+    <NavigationContainer>
+      <Tab.Navigator initialRouteName="Principal" screenOptions={{
+        headerShown: false,
+        tabBarIcon: () => null,
+        tabBarStyle: styles.menu,
+        tabBarLabelStyle: styles.textoBotao,
+        tabBarActiveTintColor: '#FFFFFF',
+        tabBarInactiveTintColor: '#475569',
+        tabBarItemStyle: styles.botao,
+        tabBarActiveBackgroundColor: '#173A63',
+      }}>
+        <Tab.Screen name="Principal" component={TelaPrincipal} />
+        <Tab.Screen name="Movimentação" component={TelaMovimentacao} />
+        <Tab.Screen name="Relatório" component={TelaRelatorio} />
+      </Tab.Navigator>
+    </NavigationContainer>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: '#F1F5F9' },
+  cabecalho: { backgroundColor: '#173A63', padding: 25, paddingTop: 45 },
+  titulo: { color: '#FFFFFF', fontSize: 25, fontWeight: 'bold' },
+  subtitulo: { color: '#D5E5F5', fontSize: 15, marginTop: 5 },
+  area: { flex: 1 },
+  conteudo: { padding: 20, paddingBottom: 36 },
+  nomeTela: { fontSize: 24, fontWeight: 'bold', color: '#173A63', marginBottom: 20 },
+  menu: { backgroundColor: '#FFFFFF', borderTopWidth: 1, borderTopColor: '#E2E8F0', height: 70, padding: 5 },
+  botao: { borderRadius: 10, marginHorizontal: 3, marginVertical: 4 },
+  textoBotao: { fontSize: 12, fontWeight: 'bold' },
+});
+

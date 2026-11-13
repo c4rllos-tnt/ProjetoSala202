@@ -1,0 +1,24 @@
+CONTROLE DE GASTOS FAMILIAR - PILOTO
+
+Este ZIP contém somente os arquivos do aplicativo, não as dependências.
+
+1. Encerre o Expo (Ctrl+C).
+2. Faça uma cópia de segurança da pasta controle-gastos-familiar.
+3. Extraia o ZIP e copie App.js, banco.js, metro.config.js e a pasta telas
+   para C:\Users\Carlos Sampaio\controle-gastos-familiar, substituindo os arquivos anteriores.
+4. Preserve package.json, package-lock.json, node_modules, assets e app.json existentes.
+5. No terminal do VS Code, dentro da pasta do projeto, execute:
+   npx.cmd expo start --web --clear
+
+TESTE
+- Movimentação: registre Receita 200,00 e Despesa 50,00.
+- Relatório: verifique os dois registros, saldo 150,00; teste editar e excluir.
+- Principal: confirme o saldo atualizado.
+- Atualize a página e confirme se os dados permanecem gravados.
+
+ATENÇÃO
+- Os totais mostram todos os registros (sem filtro mensal nesta versão).
+- A Web usa SQLite via WebAssembly e requer os cabeçalhos do metro.config.js.
+- Estes arquivos NÃO foram executados em um aparelho Android neste ambiente.
+- Não há instalação de APK neste ZIP.
+- Se as dependências de navegação já foram instaladas no projeto original, não reinstale.
